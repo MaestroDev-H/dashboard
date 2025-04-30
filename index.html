@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Snake Beam</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      background: black;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const headSpeed = 2;
+    const trailLength = 100;
+
+    const path = [];
+
+    const moves = [
+      { dx: 0, dy: 1, steps: 80 },   // down
+      { dx: -1, dy: 0, steps: 150 }, // left
+      { dx: 0, dy: 1, steps: 120 }   // down
+    ];
+
+    let currentMove = 0;
+    let stepsTaken = 0;
+
+    let head = {
+      x: canvas.width / 2,
+      y: 0
+    };
+
+    function animate() {
+      const move = moves[currentMove];
+      head.x += move.dx * headSpeed;
+      head.y += move.dy * headSpeed;
+      stepsTaken++;
+
+      path.push({ x: head.x, y: head.y });
+      if (path.length > trailLength) path.shift();
+
+      if (stepsTaken >= move.steps) {
+        currentMove++;
+        stepsTaken = 0;
+        if (currentMove >= moves.length) {
+          triggerBlast(head.x, head.y);
+          return;
+        }
+      }
+
+      draw();
+      requestAnimationFrame(animate);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < path.length; i++) {
+        const point = path[i];
+        const alpha = i / path.length;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.shadowColor = "white";
+        ctx.shadowBlur = 20 * alpha;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    function triggerBlast(cx, cy) {
+      let frame = 0;
+      const maxFrame = 80;
+
+      function animateBlast() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Blast only
+        ctx.beginPath();
+        ctx.arc(cx, cy, 10 + frame * 1.2, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${1 - frame / maxFrame})`;
+        ctx.shadowBlur = 40;
+        ctx.shadowColor = "white";
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        frame++;
+        if (frame < maxFrame) {
+          requestAnimationFrame(animateBlast);
+        }
+      }
+
+      animateBlast();
+    }
+
+    animate();
+  </script>
+</body>
+
+</html>
