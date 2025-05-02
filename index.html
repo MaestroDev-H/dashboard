@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Snake Beam</title>
+  <title>Push Beam with Visible Blusts</title>
   <style>
     html,
     body {
@@ -29,42 +29,70 @@
 
     const headSpeed = 2;
     const trailLength = 100;
-
     const path = [];
 
-    const moves = [
-      { dx: 0, dy: 1, steps: 80 },   // down
-      { dx: -1, dy: 0, steps: 150 }, // left
-      { dx: 0, dy: 1, steps: 120 }   // down
+    let head = { x: canvas.width / 2, y: 0 };
+
+    const controlPoints = [
+      { dx: 0, dy: 1, steps: 80 },
+      { dx: -0.7, dy: 1, steps: 60 },
+      { dx: 0, dy: 1, steps: 100 }
     ];
 
+    const totalSteps = controlPoints.reduce((sum, seg) => sum + seg.steps, 0);
     let currentMove = 0;
     let stepsTaken = 0;
+    let totalTaken = 0;
 
-    let head = {
-      x: canvas.width / 2,
-      y: 0
+    let burstStages = {
+      '30': false,
+      '60': false,
+      '100': false
     };
 
+    const activeBlusts = [];
+
     function animate() {
-      const move = moves[currentMove];
+      const move = controlPoints[currentMove];
       head.x += move.dx * headSpeed;
       head.y += move.dy * headSpeed;
       stepsTaken++;
+      totalTaken++;
 
       path.push({ x: head.x, y: head.y });
       if (path.length > trailLength) path.shift();
 
+      const progress = Math.floor((totalTaken / totalSteps) * 100);
+
+      // Animated blust at 30%
+      if (progress >= 30 && !burstStages['30']) {
+        burstStages['30'] = true;
+        activeBlusts.push(createBlust(head.x, head.y, 0.5));
+      }
+
+      // Animated blust at 60%
+      if (progress >= 60 && !burstStages['60']) {
+        burstStages['60'] = true;
+        activeBlusts.push(createBlust(head.x, head.y, 0.75));
+      }
+
+      draw();
+
+      // Update all active blusts
+      updateBlusts();
+
       if (stepsTaken >= move.steps) {
         currentMove++;
         stepsTaken = 0;
-        if (currentMove >= moves.length) {
-          triggerBlast(head.x, head.y);
+        if (currentMove >= controlPoints.length) {
+          if (!burstStages['100']) {
+            burstStages['100'] = true;
+            triggerFinalBlust(head.x, head.y);
+          }
           return;
         }
       }
 
-      draw();
       requestAnimationFrame(animate);
     }
 
@@ -72,10 +100,10 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       for (let i = 0; i < path.length; i++) {
-        const point = path[i];
+        const p = path[i];
         const alpha = i / path.length;
         ctx.beginPath();
-        ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 2.0, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.shadowColor = "white";
         ctx.shadowBlur = 20 * alpha;
@@ -84,18 +112,59 @@
       }
     }
 
-    function triggerBlast(cx, cy) {
+    function createBlust(x, y, scale = 1.0) {
+      return {
+        x,
+        y,
+        scale,
+        frame: 0,
+        maxFrame: 30
+      };
+    }
+
+    function updateBlusts() {
+      for (let i = 0; i < activeBlusts.length; i++) {
+        const b = activeBlusts[i];
+        const radius = 30 * b.scale + b.frame * b.scale * 1.5;
+        const opacity = 0.2 * (1 - b.frame / b.maxFrame);
+
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${opacity})`;
+        ctx.shadowBlur = 30 * b.scale;
+        ctx.shadowColor = "white";
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        b.frame++;
+      }
+
+      // Remove finished blusts
+      for (let i = activeBlusts.length - 1; i >= 0; i--) {
+        if (activeBlusts[i].frame >= activeBlusts[i].maxFrame) {
+          activeBlusts.splice(i, 1);
+        }
+      }
+    }
+
+    function triggerFinalBlust(cx, cy) {
       let frame = 0;
       const maxFrame = 80;
+
+      // Beam disappears immediately
+      path.length = 0;
+      activeBlusts.length = 0;
 
       function animateBlast() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Blast only
+        const radius = 10 + frame * 1.2;
+        const opacity = 1 - frame / maxFrame;
+
         ctx.beginPath();
-        ctx.arc(cx, cy, 10 + frame * 1.2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${1 - frame / maxFrame})`;
-        ctx.shadowBlur = 40;
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.shadowBlur = 60;
         ctx.shadowColor = "white";
         ctx.fill();
         ctx.shadowBlur = 0;
@@ -103,6 +172,8 @@
         frame++;
         if (frame < maxFrame) {
           requestAnimationFrame(animateBlast);
+        } else {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
       }
 
