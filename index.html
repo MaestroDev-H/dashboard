@@ -2,185 +2,228 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
-  <title>Push Beam with Visible Blusts</title>
+  <meta charset="UTF-8" />
+  <title>Beam Animation - Grid Ready</title>
   <style>
     html,
     body {
       margin: 0;
+      padding: 0;
       background: black;
+      height: 100%;
+    }
+
+    .beam-wrapper {
+      width: 100%;
+      position: relative;
+    }
+
+    .beam-inner {
+      width: 100%;
+      padding-top: 60%;
+      /* Aspect ratio: height = 60% of width */
+      position: relative;
       overflow: hidden;
     }
 
     canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       display: block;
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </head>
 
 <body>
-  <canvas id="canvas"></canvas>
+  <div class="beam-wrapper">
+    <div class="beam-inner">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
 
   <script>
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
 
-    const headSpeed = 2;
-    const trailLength = 100;
-    const path = [];
-
-    let head = { x: canvas.width / 2, y: 0 };
-
-    const controlPoints = [
-      { dx: 0, dy: 1, steps: 80 },
-      { dx: -0.7, dy: 1, steps: 60 },
-      { dx: 0, dy: 1, steps: 100 }
-    ];
-
-    const totalSteps = controlPoints.reduce((sum, seg) => sum + seg.steps, 0);
-    let currentMove = 0;
-    let stepsTaken = 0;
-    let totalTaken = 0;
-
-    let burstStages = {
-      '30': false,
-      '60': false,
-      '100': false
-    };
-
-    const activeBlusts = [];
-
-    function animate() {
-      const move = controlPoints[currentMove];
-      head.x += move.dx * headSpeed;
-      head.y += move.dy * headSpeed;
-      stepsTaken++;
-      totalTaken++;
-
-      path.push({ x: head.x, y: head.y });
-      if (path.length > trailLength) path.shift();
-
-      const progress = Math.floor((totalTaken / totalSteps) * 100);
-
-      // Animated blust at 30%
-      if (progress >= 30 && !burstStages['30']) {
-        burstStages['30'] = true;
-        activeBlusts.push(createBlust(head.x, head.y, 0.5));
-      }
-
-      // Animated blust at 60%
-      if (progress >= 60 && !burstStages['60']) {
-        burstStages['60'] = true;
-        activeBlusts.push(createBlust(head.x, head.y, 0.75));
-      }
-
-      draw();
-
-      // Update all active blusts
-      updateBlusts();
-
-      if (stepsTaken >= move.steps) {
-        currentMove++;
-        stepsTaken = 0;
-        if (currentMove >= controlPoints.length) {
-          if (!burstStages['100']) {
-            burstStages['100'] = true;
-            triggerFinalBlust(head.x, head.y);
-          }
-          return;
-        }
-      }
-
-      requestAnimationFrame(animate);
+    function resizeCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
     }
 
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
 
-      for (let i = 0; i < path.length; i++) {
-        const p = path[i];
-        const alpha = i / path.length;
+    const activeBlusts = [];
+    let path = [];
+
+    function drawTrail(path) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 1; i < path.length; i++) {
+        const p1 = path[i - 1];
+        const p2 = path[i];
+        const t = i / path.length;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 2.0, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${t})`;
+        ctx.lineWidth = 2 + t * 3;
         ctx.shadowColor = "white";
-        ctx.shadowBlur = 20 * alpha;
-        ctx.fill();
+        ctx.shadowBlur = 20 * t;
+        ctx.stroke();
         ctx.shadowBlur = 0;
       }
     }
 
     function createBlust(x, y, scale = 1.0) {
-      return {
+      const blust = {
         x,
         y,
         scale,
-        frame: 0,
-        maxFrame: 30
+        radius: 30 * scale,
+        opacity: 0.2
       };
+
+      activeBlusts.push(blust);
+
+      gsap.to(blust, {
+        radius: `+=${45 * scale}`,
+        opacity: 0,
+        duration: 1.5,
+        ease: "power2.out",
+        onComplete: () => {
+          const index = activeBlusts.indexOf(blust);
+          if (index > -1) activeBlusts.splice(index, 1);
+        }
+      });
     }
 
     function updateBlusts() {
-      for (let i = 0; i < activeBlusts.length; i++) {
-        const b = activeBlusts[i];
-        const radius = 30 * b.scale + b.frame * b.scale * 1.5;
-        const opacity = 0.2 * (1 - b.frame / b.maxFrame);
-
+      for (const b of activeBlusts) {
         ctx.beginPath();
-        ctx.arc(b.x, b.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${opacity})`;
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${b.opacity})`;
         ctx.shadowBlur = 30 * b.scale;
         ctx.shadowColor = "white";
         ctx.fill();
         ctx.shadowBlur = 0;
-
-        b.frame++;
-      }
-
-      // Remove finished blusts
-      for (let i = activeBlusts.length - 1; i >= 0; i--) {
-        if (activeBlusts[i].frame >= activeBlusts[i].maxFrame) {
-          activeBlusts.splice(i, 1);
-        }
       }
     }
 
-    function triggerFinalBlust(cx, cy) {
-      let frame = 0;
-      const maxFrame = 80;
-
-      // Beam disappears immediately
+    function triggerFinalBlust(cx, cy, onComplete) {
       path.length = 0;
       activeBlusts.length = 0;
 
-      function animateBlast() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const finalBlust = { radius: 10, opacity: 1 };
 
-        const radius = 10 + frame * 1.2;
-        const opacity = 1 - frame / maxFrame;
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-        ctx.shadowBlur = 60;
-        ctx.shadowColor = "white";
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        frame++;
-        if (frame < maxFrame) {
-          requestAnimationFrame(animateBlast);
-        } else {
+      gsap.to(finalBlust, {
+        radius: 120,
+        opacity: 0,
+        duration: 2,
+        ease: "power2.out",
+        onUpdate: () => {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.beginPath();
+          ctx.arc(cx, cy, finalBlust.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 255, ${finalBlust.opacity})`;
+          ctx.shadowBlur = 80;
+          ctx.shadowColor = "white";
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        },
+        onComplete: () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          if (onComplete) onComplete();
         }
-      }
-
-      animateBlast();
+      });
     }
 
-    animate();
+    function playBeam(startX, controlPoints, onDone) {
+      let head = { x: startX, y: 0 };
+      path = [];
+      activeBlusts.length = 0;
+
+      const trailLength = 180;
+      const totalSteps = controlPoints.reduce((sum, seg) => sum + seg.steps, 0);
+      const segmentDurations = controlPoints.map(p => (p.steps / totalSteps) * 3.5);
+      let burstStages = { '30': false, '60': false, '100': false };
+      let currentX = head.x;
+      let currentY = head.y;
+
+      const tl = gsap.timeline();
+
+      controlPoints.forEach((point, index) => {
+        const duration = segmentDurations[index];
+        const targetX = currentX + point.dx * point.steps;
+        const targetY = currentY + point.dy * point.steps;
+
+        tl.to(head, {
+          x: targetX,
+          y: targetY,
+          duration: duration,
+          ease: "none",
+          onUpdate: () => {
+            path.push({ x: head.x, y: head.y });
+            if (path.length > trailLength) path.shift();
+
+            const progress = tl.progress() * 100;
+            if (progress >= 30 && !burstStages['30']) {
+              burstStages['30'] = true;
+              createBlust(head.x, head.y, 0.5);
+            }
+            if (progress >= 60 && !burstStages['60']) {
+              burstStages['60'] = true;
+              createBlust(head.x, head.y, 0.75);
+            }
+
+            drawTrail(path);
+            updateBlusts();
+          }
+        });
+
+        currentX = targetX;
+        currentY = targetY;
+      });
+
+      tl.call(() => {
+        if (!burstStages['100']) {
+          burstStages['100'] = true;
+          triggerFinalBlust(head.x, head.y, onDone);
+        }
+      });
+
+      tl.play();
+    }
+
+    const centerX = canvas.width / 2;
+    const rightX = centerX + canvas.width * 0.2;
+    const leftX = centerX - canvas.width * 0.2;
+
+    const points = [
+      { dx: 0, dy: 1, steps: 100 },
+      { dx: -0.4, dy: 1, steps: 80 },
+      { dx: 0.6, dy: 1, steps: 100 },
+      { dx: 0, dy: 1, steps: 160 }
+    ];
+
+    function startSequence() {
+      playBeam(centerX, points, () => {
+        playBeam(rightX, points, () => {
+          playBeam(leftX, points, () => {
+            console.log("All beams complete.");
+          });
+        });
+      });
+    }
+
+    startSequence();
   </script>
 </body>
 
